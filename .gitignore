@@ -10,6 +10,9 @@ Media/
 dist/*.*
 dist/
 
+# Documentation
+docs/
+
 # IDE and editor files
 .vscode/
 .idea/

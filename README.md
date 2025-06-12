@@ -3,7 +3,7 @@ A text editor, providing a clean and modern interface for formatting your storie
 
 ## Features
    - Support Common Picture Book Layout Formats
-   - Dynamically aotate
+   - Dynamic spread numbering
 
 ## Development Setup
 
