@@ -222,6 +222,34 @@ function createWindow() {
           }
         }
       ]
+    },
+    {
+      label: 'Format',
+      submenu: [
+        {
+          label: 'Default Font',
+          click: () => mainWindow.webContents.send('apply-format', 'default')
+        },
+        {
+          label: 'Illustration',
+          click: () => mainWindow.webContents.send('apply-format', 'illustration')
+        },
+        {
+          label: 'Title',
+          click: () => mainWindow.webContents.send('apply-format', 'title')
+        },
+        { type: 'separator' },
+        {
+          label: 'Add Spread Label',
+          accelerator: 'CmdOrCtrl+L',
+          click: () => mainWindow.webContents.send('add-spread')
+        },
+        {
+          label: 'Delete Spread Label',
+          accelerator: 'CmdOrCtrl+Shift+L',
+          click: () => mainWindow.webContents.send('delete-spread')
+        }
+      ]
     }
   ];
 
@@ -269,4 +297,4 @@ ipcMain.handle('save-file', async (event, { filePath, content }) => {
   } catch (error) {
     return { success: false, error: error.message };
   }
-}); 
+});

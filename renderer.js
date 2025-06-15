@@ -1,50 +1,237 @@
 const { ipcRenderer } = require('electron');
 
-// Initialize Quill
+// --- Custom Quill Blots and Registration ---
+
+// Spread Block Embed
+class SpreadBlot extends Quill.import('blots/block/embed') {
+    static create(value) {
+        const node = super.create();
+        node.setAttribute('data-spread', value);
+        node.textContent = value;
+        node.className = 'spread-label';
+        node.setAttribute('contenteditable', 'false');
+        return node;
+    }
+    static value(node) { return node.getAttribute('data-spread'); }
+}
+SpreadBlot.blotName = 'spread';
+SpreadBlot.tagName = 'div';
+Quill.register(SpreadBlot);
+
+// Picture Book Format Block
+const Block = Quill.import('blots/block');
+class PBFormatBlot extends Block {
+    static create(value) {
+        const node = super.create();
+        if (value) node.className = `pb-${value}`;
+        return node;
+    }
+    static formats(node) {
+        const classes = node.className.match(/pb-(\w+)/);
+        return classes ? classes[1] : null;
+    }
+}
+PBFormatBlot.blotName = 'pb-format';
+PBFormatBlot.tagName = 'p';
+Quill.register(PBFormatBlot);
+
+// --- Spread Manager ---
+class SpreadManager {
+    constructor(quill, preferences) {
+        this.quill = quill;
+        this.firstSpreadNumber = preferences.firstDisplaySpreadPageNumber || 3;
+        this.maxPages = preferences.layout || 32;
+        this.updateSequence();
+    }
+
+    updateSequence() {
+        this.spreadSequence = [];
+        for (let i = 1; i <= this.maxPages; i++) {
+            if (i === 1 || i === this.maxPages) {
+                this.spreadSequence.push(i.toString());
+            } else if (i % 2 === 0) {
+                this.spreadSequence.push(`${i}-${i + 1}`);
+                i++;
+            }
+        }
+    }
+
+    getNextSpreadLabel() {
+        // Find all spread labels in doc
+        const delta = this.quill.getContents();
+        let used = [];
+        delta.ops.forEach(op => {
+            if (op.insert && op.insert.spread) used.push(op.insert.spread);
+        });
+        // Find first unused label after firstSpreadNumber
+        let startIdx = this.spreadSequence.findIndex(lab => {
+            if (lab.includes('-')) {
+                const [a, b] = lab.split('-').map(Number);
+                return a <= this.firstSpreadNumber && this.firstSpreadNumber <= b;
+            }
+            return Number(lab) === this.firstSpreadNumber;
+        });
+        if (startIdx === -1) startIdx = 0;
+        for (let i = startIdx; i < this.spreadSequence.length; i++) {
+            if (!used.includes(this.spreadSequence[i])) return this.spreadSequence[i];
+        }
+        return null;
+    }
+
+    addSpread() {
+        const label = this.getNextSpreadLabel();
+        if (!label) return;
+        const selection = this.quill.getSelection();
+        const index = selection ? selection.index : this.quill.getLength();
+        this.quill.insertEmbed(index, 'spread', label, Quill.sources.USER);
+        this.quill.insertText(index + 1, '\n', 'pb-format', 'default', Quill.sources.USER);
+        this.quill.setSelection(index + 2, 0, Quill.sources.SILENT);
+    }
+
+    deleteSpread() {
+        const selection = this.quill.getSelection();
+        if (!selection) return;
+        const [blot, offset] = this.quill.getLine(selection.index);
+        if (blot && blot.domNode && blot.domNode.classList.contains('spread-label')) {
+            // Remove the spread label block
+            this.quill.deleteText(selection.index - offset, 1, Quill.sources.USER);
+        }
+    }
+}
+
+// --- Quill Initialization ---
+let preferences = {
+    layout: 32,
+    firstDisplaySpreadPageNumber: 3
+};
+let spreadManager;
+
 const quill = new Quill('#editor', {
     theme: 'snow',
     modules: {
-        toolbar: [
-            ['bold', 'italic', 'underline', 'strike'],
-            ['blockquote', 'code-block'],
-            [{ 'header': 1 }, { 'header': 2 }],
-            [{ 'list': 'ordered'}, { 'list': 'bullet' }],
-            [{ 'script': 'sub'}, { 'script': 'super' }],
-            [{ 'indent': '-1'}, { 'indent': '+1' }],
-            [{ 'direction': 'rtl' }],
-            [{ 'size': ['small', false, 'large', 'huge'] }],
-            [{ 'header': [1, 2, 3, 4, 5, 6, false] }],
-            [{ 'color': [] }, { 'background': [] }],
-            [{ 'font': [] }],
-            [{ 'align': [] }],
-            ['clean']
-        ],
-        counter: true
+        toolbar: {
+            container: [
+                [{ 'pb-format': ['default', 'illustration', 'title'] }],
+                ['bold', 'italic', 'underline'],
+                [{ 'list': 'ordered'}, { 'list': 'bullet' }],
+                ['clean']
+            ],
+            handlers: {
+                'pb-format': function(value) {
+                    const range = this.quill.getSelection();
+                    if (range) this.quill.format('pb-format', value);
+                }
+            }
+        }
     }
 });
 
-function Counter(quill, options) {
-  const container = document.querySelector('#counter');
-  quill.on(Quill.events.TEXT_CHANGE, () => {
-    const text = quill.getText();
-    // There are a couple issues with counting words
-    // this way but we'll fix these later
-    container.innerText = text.split(/\s+/).length;
-  });
-}
-Quill.register('modules/counter', Counter);
+// --- SpreadManager instance ---
+spreadManager = new SpreadManager(quill, preferences);
 
+// --- Settings Panel Handlers ---
+const firstSpreadInput = document.getElementById('firstSpreadNumber');
+const layoutSelect = document.getElementById('layoutSelect');
+firstSpreadInput.addEventListener('change', () => {
+    preferences.firstDisplaySpreadPageNumber = Number(firstSpreadInput.value);
+    spreadManager.firstSpreadNumber = preferences.firstDisplaySpreadPageNumber;
+    spreadManager.updateSequence();
+});
+layoutSelect.addEventListener('change', () => {
+    preferences.layout = Number(layoutSelect.value);
+    spreadManager.maxPages = preferences.layout;
+    spreadManager.updateSequence();
+});
+
+// --- Menu Event Handlers ---
+ipcRenderer.on('apply-format', (event, formatType) => {
+    const selection = quill.getSelection();
+    if (selection) quill.format('pb-format', formatType);
+});
+ipcRenderer.on('add-spread', () => {
+    spreadManager.addSpread();
+});
+ipcRenderer.on('delete-spread', () => {
+    spreadManager.deleteSpread();
+});
+
+// --- Preferences from main ---
+ipcRenderer.on('preferences-loaded', (event, prefs) => {
+    preferences = prefs;
+    if (prefs.layout) {
+        layoutSelect.value = prefs.layout;
+        spreadManager.maxPages = prefs.layout;
+    }
+    if (prefs.firstDisplaySpreadPageNumber) {
+        firstSpreadInput.value = prefs.firstDisplaySpreadPageNumber;
+        spreadManager.firstSpreadNumber = prefs.firstDisplaySpreadPageNumber;
+    }
+    spreadManager.updateSequence();
+    // Apply layout class
+    const editorContainer = document.querySelector('.ql-container');
+    editorContainer.className = `ql-container layout-${preferences.layout}`;
+});
+
+// --- Enhanced Word Counter ---
+function updateWordCount() {
+    const delta = quill.getContents();
+    let totalWords = 0;
+    delta.ops.forEach(op => {
+        if (op.insert && typeof op.insert === 'string') {
+            const words = op.insert.trim().split(/\s+/).filter(w => w.length > 0);
+            totalWords += words.length;
+        }
+    });
+    document.getElementById('counter').textContent = `Words: ${totalWords}`;
+}
+quill.on('text-change', updateWordCount);
+updateWordCount();
+
+// --- Save/Load logic (JSON with metadata) ---
+async function saveFile(filePath) {
+    const content = quill.root.innerHTML;
+    const metadata = {
+        firstSpreadNumber: spreadManager.firstSpreadNumber,
+        layout: spreadManager.maxPages,
+        version: '2.0'
+    };
+    const documentData = {
+        content: content,
+        metadata: metadata
+    };
+    const result = await ipcRenderer.invoke('save-file', {
+        filePath,
+        content: JSON.stringify(documentData, null, 2)
+    });
+    if (result.success) {
+        console.log('File saved successfully');
+    } else {
+        alert('Error saving file: ' + result.error);
+    }
+}
+async function saveFileAs() {
+    const filePath = await ipcRenderer.invoke('save-dialog');
+    if (filePath) {
+        await saveFile(filePath);
+    }
+}
+
+// --- Keyboard Shortcuts for Spread Labels ---
+document.addEventListener('keydown', (e) => {
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'l') {
+        if (e.shiftKey) {
+            spreadManager.deleteSpread();
+        } else {
+            spreadManager.addSpread();
+        }
+        e.preventDefault();
+    }
+});
+
+// --- Save Button Logic ---
 const saveButton = document.getElementById('saveButton');
 let currentFilePath = null;
 let currentLayout = 32; // Default layout
-
-// Handle preferences
-ipcRenderer.on('preferences-loaded', (event, prefs) => {
-    currentLayout = prefs.layout;
-    // Apply layout class
-    const editorContainer = document.querySelector('.ql-container');
-    editorContainer.className = `ql-container layout-${currentLayout}`;
-});
 
 // Handle menu events
 ipcRenderer.on('new-file', () => {
@@ -110,31 +297,6 @@ ipcRenderer.on('zoom-reset', () => {
     document.body.style.zoom = 1;
 });
 
-// Save functions
-async function saveFile(filePath) {
-    const content = quill.root.innerHTML;
-    const result = await ipcRenderer.invoke('save-file', {
-        filePath,
-        content
-    });
-    
-    if (result.success) {
-        console.log('File saved successfully');
-    } else {
-        alert('Error saving file: ' + result.error);
-    }
-}
-
-async function saveFileAs() {
-    const content = quill.root.innerHTML;
-    const filePath = await ipcRenderer.invoke('save-dialog');
-    
-    if (filePath) {
-        currentFilePath = filePath;
-        await saveFile(filePath);
-    }
-}
-
 // Button click handler
 saveButton.addEventListener('click', async () => {
     if (currentFilePath) {
@@ -142,4 +304,4 @@ saveButton.addEventListener('click', async () => {
     } else {
         await saveFileAs();
     }
-}); 
+});
