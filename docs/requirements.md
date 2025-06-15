@@ -26,34 +26,70 @@ Font Family or Style of 'Times', 12 point, double-spaced, black font color, left
 ## Spread Notation - labels and numbers
 Spread notation is a way for a user to insert additional logical 'sections' into their larger text document, without having a visual text editor attempt to move the text to different pages, instead keeping all of the text on the editor's page, such that the content can fit on the fewest printed pages.
 Spread notation is not intended to alter the formatting of the file that the user and this application will be editing.
-Spread notation is text that is inserted into new files, as well as edited files, spreads will be re-added or adjusted, as needed.
+Spread notation is effectively just text that is inserted into a file, initiated by manual action by the user.
 Spread notation has set rules that must be followed.
 For a Set of Spreads, there will be 16 Spreads.  
+
 The representation and labelling of a set of Spreads in can vary by user option, but there are limited variations.
-Do not implement any variations, unless explicitly specified.
-A given Spread notation should not be repeated in a document, 
-A Spread will have a label
-A Spreads label has three variations.
+The underlying sequence for spreads follows this pattern: 1, 2-3, 4-5, 6-7... 30-31, 32
+The user may choose the first number to appear in the document as a setting.  Default value is 3.  name this setting 'firstDisplaySpreadPageNumber'
+If the first number chosen would be the second number in a paired spread, such the value of 3 in '2-3' we would hide the 2, and we would not display the dash and then the number.
+A given Spread notation should not be repeated in a document, nor should a value in a spreads label.
+Spread notation representation or label has three variations.
 First type of Spread label will consist of an integer that is greater than zero, but less than 33. Not zero padded.
 Second type of Spread label will consist of two integers with a space, a dash, and a space between them, the leftmost integer will be less than the rightmost integer, and each will also be greater than zero and less than 33.
 The Third type of spread label is a blank label.  Sometimes a user does not need to annotate their document for the first couple of sections.  They may choose to have certain section number be represented as blank.  (such as 1, or 1-2)
 
-Spread 1 = page 3
-Spread 2 = pages 4-5
-Spread 3 = pages 6-7
-Spread 4 = pages 8-9
-Spread 5 = pages 10-11
-Spread 6 = pages 12-13
-Spread 7 = pages 14-15
-Spread 8 = pages 16-17
-Spread 9 = pages 18-19
-Spread 10 = pages 20-21
-Spread 11 = pages 22-23
-Spread 12 = pages 24-25
-Spread 13 = pages 26-27
-Spread 14 = pages 28-29
-Spread 15 = pages 30-31
-Spread 16 = page 32 (alone)
+
+# Adding Spreads
+The file under edit should not have any spread labels applied until the user manually does so.
+There should be a toolbar button, under a sub-section of 'Spread Numnbering' with 'Add Spread Label' and 'Delete Spread Label'.  
+'Add Spread Label' and 'Delete Spread Label' should have keyboard shortcuts.
+The Windows Shortucuts should be of Ctrl-L to Add, and Ctrl-Shift-L to Delete.
+Mac OS Shortcuts shoudl be command-L and command-Shift-L to delete.
+
+A User may delete a spread label as they would any other text as well as highlight and using toolbar or keyboard shortcut.
+The Spread label should be treated as immutable and atomic.  
+A user may not edit, or partially delete a spread label.  
+Example:  if in the document exists " 17-18 " do not allow the user to backspace over the 8, without removing the entire spread label.
+The user should not be allowed to put text on the same line as a Spread label.
+
+If a User deletes a spread label, the text below that label will move up and belong to the previous spread label in the sequence, if a previous spread label exists,
+If the documnent contains one or many spread labels after the deleted spread label, those remaining spread labels neeed to 'shift' to account for the now removed labeld.
+
+Example:
+Before Delete:
+
+```
+18-19
+{Test Paragraph One}
+ 
+20-21
+{Test Paragraph Two}
+ 
+22-23
+{Test Paragraph Three}
+ 
+24-25
+{Test Paragraph Four}
+{End of file}
+```
+
+When User Deletes '20-21' from above, the expected result is as follows:
+```
+18-19
+{Test Paragraph One}
+{Test Paragraph Two}
+ 
+20-21
+{Test Paragraph Three}
+ 
+22-23
+{Test Paragraph Four}
+{End of file}
+```
+
+Note that the labeling now ends at 22-23, and the user will need to apply a new spread label if they choose to add another section.
 
 
 ## Description of Spread Structure and Text Styles
@@ -75,7 +111,6 @@ Secondary Email
 By {Author}
 
 Pitch: {Paragraph summary / pitch of following story}
-
 
                                                       [  {Right justified Illustration text format} ]
 3 
@@ -132,7 +167,7 @@ OPTIONAL BACKMATTER
 
 
 ## Clarifications
- - Spread and page number is not placed in a header or footer of a document, but is represented in text as a separate Quil Delta.  
+ - Spread and page number is not placed in a header or footer of a document, but is represented in text as a separate Quil BlockEmbed.  
  - From the user's perspective, the text 'belongs' to the spread label above it.  To state another way, a spread label indicates the beginning of a spread section, and all text after that spread label 'belongs' to that spared, until the next spread notation in the document occurs. 
         - In example above, {Default Text - First Example} is on spread label 3
  -  The Primary purpose of our formatter is to apply the spread numbers to a document, and then allow the writer to write as little or much as they want between the spread numbers, keeping the spread numbers on the document at all times, and ensuring they are saved with the document.
