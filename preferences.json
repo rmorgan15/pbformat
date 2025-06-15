@@ -2,6 +2,6 @@
     "layout": 32,
     "theme": "light",
     "fontSize": 16,
-    "autoSave": false,
+    "autoSave": true,
     "recentFiles": []
 } 

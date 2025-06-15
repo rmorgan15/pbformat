@@ -18,9 +18,21 @@ const quill = new Quill('#editor', {
             [{ 'font': [] }],
             [{ 'align': [] }],
             ['clean']
-        ]
+        ],
+        counter: true
     }
 });
+
+function Counter(quill, options) {
+  const container = document.querySelector('#counter');
+  quill.on(Quill.events.TEXT_CHANGE, () => {
+    const text = quill.getText();
+    // There are a couple issues with counting words
+    // this way but we'll fix these later
+    container.innerText = text.split(/\s+/).length;
+  });
+}
+Quill.register('modules/counter', Counter);
 
 const saveButton = document.getElementById('saveButton');
 let currentFilePath = null;
